@@ -1,11 +1,11 @@
 """
 提醒備忘系統 - LINE Messaging API 發送模組
-Version: v1.0.0
+Version: v1.0.1
 """
 import requests
 
-# 你的專屬 LINE 機器人金鑰
-LINE_CHANNEL_ACCESS_TOKEN = 'DpW4rf3pq1D+3uZJFAckHmij+tGTYqWRTZB6tuEmW78TmBkJT3QbAg9xUuj29BhpX9NMAMVLrW2zWGNdlFasXLwAVZyivpA5iDOtFype6YZyfmU5tT+1jZBZACtA7C9QulemNJsMouRvPuZph+ZQiAdB04t89/1O/w1cDnyilFU='
+# 你的專屬 LINE 機器人金鑰與收件地址
+LINE_CHANNEL_ACCESS_TOKEN = 'HBFDQ5/H4+xHod9M9PXlEIgjvzhzwQvcUeANA5Elw0YnKYFEv8u0twq3DG5GJIlTX9NMAMVLrW2zWGNdlFasXLwAVZyivpA5iDOtFype6YZts+qv5dXKPwbiu/0u6tWj6b/OLskjApFttz5PWJ2kcAdB04t89/1O/w1cDnyilFU='
 LINE_USER_ID = 'U8a9211a3c79ea657501be440fc73e797'
 
 def send_message(text_content):
