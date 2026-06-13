@@ -1,16 +1,25 @@
 """
 提醒備忘系統 - 網頁主程式
-Version: v1.0.3
+Version: v1.0.4
 """
 import streamlit as st
 import datetime
 from modules import db_manager
-from modules import line_bot_api  # 引入我們剛剛寫好的 LINE 模組
+from modules import line_bot_api
+from modules import scheduler  # 引入排程器
 
 # 1. 初始化資料庫
 db_manager.init_db()
 
-# 2. 設定 Streamlit 頁面外觀
+# 2. 啟動背景自動排程器 (確保伺服器執行期間只啟動一次)
+@st.cache_resource
+def init_scheduler():
+    scheduler.start_background_task()
+    return True
+
+init_scheduler()
+
+# 3. 設定 Streamlit 頁面外觀
 st.set_page_config(page_title="提醒備忘系統", page_icon="⏰", layout="wide")
 
 # 設定台灣時區 (UTC+8)
@@ -50,9 +59,7 @@ with st.sidebar:
             
     st.divider() 
     
-    # ----------------------------------------
     # LINE Bot 測試按鈕區塊
-    # ----------------------------------------
     st.markdown("### 🔧 系統連線測試")
     if st.button("發送 LINE 測試訊息", type="primary", use_container_width=True):
         success = line_bot_api.send_message("💡 測試訊息：你的專屬備忘錄機器人已成功連線！")
@@ -99,7 +106,7 @@ else:
                 st.markdown("修改時間")
                 ecol1, ecol2, ecol3 = st.columns(3)
                 with ecol1:
-                    e_h_val = st.selectbox("小時", [f"{i:02d}" for i in range(24)], index=orig_dt.hour, key=f"eh_{r['id']}")
+                    e_h_val = st.selectbox("小時", [f"{f'{i:02d}'}" for i in range(24)], index=orig_dt.hour, key=f"eh_{r['id']}")
                 with ecol2:
                     e_m1_val = st.selectbox("分(十位)", [str(i) for i in range(6)], index=orig_dt.minute // 10, key=f"em1_{r['id']}")
                 with ecol3:
