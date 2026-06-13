@@ -41,16 +41,28 @@ def get_all_reminders():
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM reminders ORDER BY remind_time ASC")
+    # 將結果轉換為字典格式方便前端使用
     columns = [col[0] for col in cursor.description]
     results = [dict(zip(columns, row)) for row in cursor.fetchall()]
     conn.close()
     return results
 
 def update_status(reminder_id, status):
-    """更新備忘錄狀態 (Update)"""
+    """更新備忘錄狀態 (Update) - 推播後使用"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE reminders SET status = ? WHERE id = ?", (status, reminder_id))
+    conn.commit()
+    conn.close()
+
+def edit_reminder(reminder_id, new_content, new_time):
+    """修改備忘錄內容與時間 (Update) - 網頁編輯使用"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE reminders SET content = ?, remind_time = ? WHERE id = ?", 
+        (new_content, new_time, reminder_id)
+    )
     conn.commit()
     conn.close()
 
