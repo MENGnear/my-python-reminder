@@ -9,7 +9,7 @@ from modules import db_manager
 from modules import line_bot_api
 
 def check_and_send_reminders():
-    """檢查資料庫並發送提醒的邏輯 (類似單次掃描週期)"""
+    """檢查資料庫並發送提醒"""
     # 取得當前台灣時間
     TW_TZ = datetime.timezone(datetime.timedelta(hours=8))
     now = datetime.datetime.now(TW_TZ)
@@ -27,7 +27,7 @@ def check_and_send_reminders():
             # 觸發 LINE 發送
             success = line_bot_api.send_message(msg)
             
-            # 如果發送成功，更新資料庫狀態，避免重複發送
+            # 如果發送成功，更新資料庫狀態為已發送 (sent)
             if success:
                 db_manager.update_status(r['id'], 'sent')
                 print(f"✅ 自動推播成功: {r['content']}")
@@ -39,6 +39,6 @@ def continuous_run():
         time.sleep(30)  # 每 30 秒掃描一次資料庫
 
 def start_background_task():
-    """啟動背景執行緒 (Daemon Thread)，避免卡死 Streamlit 主網頁"""
+    """啟動背景執行緒 (Daemon Thread)"""
     thread = threading.Thread(target=continuous_run, daemon=True)
     thread.start()
