@@ -1,6 +1,6 @@
 """
 提醒備忘系統 - 網頁主程式
-Version: v1.0.0
+Version: v1.0.1
 """
 import streamlit as st
 import datetime
@@ -12,18 +12,18 @@ db_manager.init_db()
 # 2. 設定 Streamlit 頁面外觀
 st.set_page_config(page_title="提醒備忘系統", page_icon="⏰", layout="wide")
 
-# 設定台灣時區 (UTC+8)，修正雲端伺服器時間差
+# 設定台灣時區 (UTC+8)
 TW_TZ = datetime.timezone(datetime.timedelta(hours=8))
 
 st.title("⏰ 我的提醒備忘錄")
 
 # ----------------------------------------
-# 左側邊欄：新增備忘錄區塊
+# 左側邊欄：新增備忘錄與系統時間
 # ----------------------------------------
 with st.sidebar:
     st.header("➕ 新增提醒")
     
-    # 取得當下的台灣時間作為預設值
+    # 取得當下的台灣時間
     now_in_tw = datetime.datetime.now(TW_TZ)
     
     content = st.text_input("備忘內容", placeholder="例如：下午三點與供應商開會")
@@ -39,6 +39,15 @@ with st.sidebar:
             st.rerun()
         else:
             st.error("⚠️ 請輸入備忘內容！")
+            
+    # ----------------------------------------
+    # 底部時間顯示區塊 (模擬左下角時鐘)
+    # ----------------------------------------
+    st.divider()  # 加入視覺分隔線
+    st.markdown("### 🕒 目前台灣時間")
+    # 使用 metric 元件讓時間顯示更大、更具科技感
+    st.metric(label="", value=now_in_tw.strftime("%Y-%m-%d"), delta=now_in_tw.strftime("%H:%M:%S"), delta_color="off")
+    st.caption("提示：重新整理網頁或操作按鈕即可更新時間")
 
 # ----------------------------------------
 # 主畫面：顯示現有備忘錄
