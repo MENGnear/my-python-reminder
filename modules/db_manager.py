@@ -1,3 +1,7 @@
+"""
+提醒備忘系統 - 資料庫管理模組
+Version: v1.0.0
+"""
 import sqlite3
 from datetime import datetime
 
@@ -12,7 +16,6 @@ def init_db():
     """初始化資料庫與資料表"""
     conn = get_connection()
     cursor = conn.cursor()
-    # 狀態 (status) 預設為 'pending' (待提醒)，之後推播完會改成 'notified'
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS reminders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,11 +40,10 @@ def add_reminder(content, remind_time):
     conn.close()
 
 def get_all_reminders():
-    """取得所有備忘錄 (Read) - 供 Streamlit 介面顯示"""
+    """取得所有備忘錄 (Read)"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM reminders ORDER BY remind_time ASC")
-    # 將結果轉換為字典格式方便前端使用
     columns = [col[0] for col in cursor.description]
     results = [dict(zip(columns, row)) for row in cursor.fetchall()]
     conn.close()
