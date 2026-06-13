@@ -1,6 +1,6 @@
 """
 提醒備忘系統 - 網頁主程式
-Version: v1.0.1
+Version: v1.0.2
 """
 import streamlit as st
 import datetime
@@ -28,12 +28,25 @@ with st.sidebar:
     
     content = st.text_input("備忘內容", placeholder="例如：下午三點與供應商開會")
     remind_date = st.date_input("提醒日期", now_in_tw.date())
-    remind_time = st.time_input("提醒時間", now_in_tw.time())
+    
+    # 時間輸入 (拆分為: 小時、分(十位)、分(個位))
+    st.markdown("提醒時間")
+    t_col1, t_col2, t_col3 = st.columns(3)
+    with t_col1:
+        # 小時: 00~23，預設為目前小時
+        h_val = st.selectbox("小時", [f"{i:02d}" for i in range(24)], index=now_in_tw.hour)
+    with t_col2:
+        # 分(十位): 0~5，預設為目前分鐘的十位數
+        m1_val = st.selectbox("分(十位)", [str(i) for i in range(6)], index=now_in_tw.minute // 10)
+    with t_col3:
+        # 分(個位): 0~9，預設為目前分鐘的個位數
+        m2_val = st.selectbox("分(個位)", [str(i) for i in range(10)], index=now_in_tw.minute % 10)
     
     if st.button("加入備忘錄", use_container_width=True):
         if content:
-            full_datetime = datetime.datetime.combine(remind_date, remind_time)
-            time_str = full_datetime.strftime("%Y-%m-%d %H:%M:%S")
+            # 組合日期與時間字串
+            time_str = f"{remind_date.strftime('%Y-%m-%d')} {h_val}:{m1_val}{m2_val}:00"
+            
             db_manager.add_reminder(content, time_str)
             st.success("✅ 成功加入！")
             st.rerun()
@@ -41,11 +54,10 @@ with st.sidebar:
             st.error("⚠️ 請輸入備忘內容！")
             
     # ----------------------------------------
-    # 底部時間顯示區塊 (模擬左下角時鐘)
+    # 底部時間顯示區塊
     # ----------------------------------------
-    st.divider()  # 加入視覺分隔線
+    st.divider()  
     st.markdown("### 🕒 目前台灣時間")
-    # 使用 metric 元件讓時間顯示更大、更具科技感
     st.metric(label="", value=now_in_tw.strftime("%Y-%m-%d"), delta=now_in_tw.strftime("%H:%M:%S"), delta_color="off")
     st.caption("提示：重新整理網頁或操作按鈕即可更新時間")
 
@@ -77,14 +89,20 @@ else:
                 orig_dt = datetime.datetime.strptime(r['remind_time'], "%Y-%m-%d %H:%M:%S")
                 
                 edit_content = st.text_input("修改內容", value=r['content'], key=f"ec_{r['id']}")
+                edit_date = st.date_input("修改日期", value=orig_dt.date(), key=f"ed_{r['id']}")
                 
-                ecol1, ecol2 = st.columns(2)
+                st.markdown("修改時間")
+                ecol1, ecol2, ecol3 = st.columns(3)
                 with ecol1:
-                    edit_date = st.date_input("修改日期", value=orig_dt.date(), key=f"ed_{r['id']}")
+                    e_h_val = st.selectbox("小時", [f"{i:02d}" for i in range(24)], index=orig_dt.hour, key=f"eh_{r['id']}")
                 with ecol2:
-                    edit_time = st.time_input("修改時間", value=orig_dt.time(), key=f"et_{r['id']}")
+                    e_m1_val = st.selectbox("分(十位)", [str(i) for i in range(6)], index=orig_dt.minute // 10, key=f"em1_{r['id']}")
+                with ecol3:
+                    e_m2_val = st.selectbox("分(個位)", [str(i) for i in range(10)], index=orig_dt.minute % 10, key=f"em2_{r['id']}")
                     
                 if st.button("💾 儲存修改", key=f"save_{r['id']}", use_container_width=True):
-                    new_time_str = datetime.datetime.combine(edit_date, edit_time).strftime("%Y-%m-%d %H:%M:%S")
+                    # 組合修改後的日期與時間字串
+                    new_time_str = f"{edit_date.strftime('%Y-%m-%d')} {e_h_val}:{e_m1_val}{e_m2_val}:00"
+                    
                     db_manager.edit_reminder(r['id'], edit_content, new_time_str)
                     st.rerun()
