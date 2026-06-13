@@ -1,0 +1,46 @@
+"""
+提醒備忘系統 - LINE Messaging API 發送模組
+Version: v1.0.1
+"""
+import requests
+
+# 你的專屬 LINE 機器人金鑰與收件地址
+LINE_CHANNEL_ACCESS_TOKEN = 'HBFDQ5/H4+xHod9M9PXlEIgjvzhzwQvcUeANA5Elw0YnKYFEv8u0twq3DG5GJIlTX9NMAMVLrW2zWGNdlFasXLwAVZyivpA5iDOtFype6YZts+qv5dXKPwbiu/0u6tWj6b/OLskjApFttz5PWJ2kcAdB04t89/1O/w1cDnyilFU='
+LINE_USER_ID = 'U8a9211a3c79ea657501be440fc73e797'
+
+def send_message(text_content):
+    """
+    透過 LINE Messaging API 將文字訊息推播給指定的 User ID
+    """
+    url = 'https://api.line.me/v2/bot/message/push'
+    
+    # 設定 API 標頭 (Headers)，帶入 Token 證明發言權限
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {LINE_CHANNEL_ACCESS_TOKEN}'
+    }
+    
+    # 設定要發送的資料內容 (Data)，指定收件人與訊息內容
+    data = {
+        "to": LINE_USER_ID,
+        "messages": [
+            {
+                "type": "text",
+                "text": text_content
+            }
+        ]
+    }
+    
+    # 執行發送動作
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()  # 如果發生錯誤會跳到 except 區塊
+        print("✅ LINE 訊息推播成功！")
+        return True
+    except requests.exceptions.RequestException as e:
+        print(f"❌ LINE 訊息推播失敗: {e}")
+        return False
+
+# 測試用：如果直接執行這支檔案，就會發送一則測試訊息
+if __name__ == '__main__':
+    send_message("💡 測試訊息：你的專屬備忘錄機器人已成功連線！")
