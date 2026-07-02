@@ -2,7 +2,7 @@
 # ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 # 專案名稱 : 提醒備忘系統 - 網頁主程式 (Telegram 深色戰情室 UI 版)
 # 檔案名稱 : RMDR_app.py
-# 程式版本 : v2.0.1
+# 程式版本 : v2.0.2 (RWD 手機適配與原生時間選擇器優化)
 # ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 # ==========================================================
 
@@ -15,12 +15,17 @@ from modules import db_manager
 from modules import scheduler  # 引入排程器
 
 # ==========================================================
-# 1️⃣ 🚀 頁面設定 (必須是第一步，確保環境與主題正確載入)
+# 1️⃣ 🚀 頁面設定 (加入 initial_sidebar_state="auto" 讓手機自動收折)
 # ==========================================================
-st.set_page_config(page_title="提醒備忘系統", page_icon="⏰", layout="wide")
+st.set_page_config(
+    page_title="提醒備忘系統", 
+    page_icon="⏰", 
+    layout="wide",
+    initial_sidebar_state="auto" 
+)
 
 # ==========================================================
-# 2️⃣ 🎨 注入純淨 CSS (完全移植 TW50_V3.32，無破壞性 Hack)
+# 2️⃣ 🎨 注入純淨 CSS 
 # ==========================================================
 st.markdown(r'''
 <style>
@@ -75,7 +80,7 @@ h1.main-title { color: #f8fafc; font-weight: 800; text-align: left; padding-bott
 # ==========================================================
 # 3️⃣ ⚙️ 初始化與 Telegram API 設定
 # ==========================================================
-APP_VERSION = "v2.0.1"
+APP_VERSION = "v2.0.2"
 
 # 設定台灣時區 (UTC+8)
 TW_TZ = datetime.timezone(datetime.timedelta(hours=8))
@@ -123,20 +128,17 @@ with st.sidebar:
         
         now_in_tw = datetime.datetime.now(TW_TZ)
         
-        # 使用原生 st.text_input 不加隱藏標籤
         content = st.text_input("備忘內容", placeholder="例如：下午三點開會")
-        remind_date = st.date_input("提醒日期", now_in_tw.date())
         
-        st.markdown("<div style='color:#cbd5e1; font-weight:600; font-size:0.95rem; margin-top:10px;'>設定時間 (時/分)</div>", unsafe_allow_html=True)
-        t_col1, t_col2, t_col3 = st.columns(3)
-        with t_col1:
-            h_val = st.selectbox("小時", [f"{i:02d}" for i in range(24)], index=now_in_tw.hour)
-        with t_col2:
-            m1_val = st.selectbox("十分", [str(i) for i in range(6)], index=now_in_tw.minute // 10)
-        with t_col3:
-            m2_val = st.selectbox("個分", [str(i) for i in range(10)], index=now_in_tw.minute % 10)
+        # 升級為原生 Date 與 Time Input (解決手機截斷問題)
+        col1, col2 = st.columns(2)
+        with col1:
+            remind_date = st.date_input("提醒日期", now_in_tw.date())
+        with col2:
+            remind_time = st.time_input("設定時間", now_in_tw.time())
             
-        remind_time_str = f"{remind_date} {h_val}:{m1_val}{m2_val}:00"
+        # 組合字串並固定秒數為 00
+        remind_time_str = f"{remind_date} {remind_time.strftime('%H:%M')}:00"
         
         if st.button("➕ 確認新增", use_container_width=True):
             if content:
@@ -156,7 +158,7 @@ with st.sidebar:
             else:
                 st.error(msg)
 
-    # 系統狀態備註卡片 (對齊 TW50 格式)
+    # 系統狀態備註卡片
     now_utc = datetime.datetime.now(datetime.timezone.utc)
     tpe_now = now_utc.astimezone(TW_TZ)
     tpe_time_str = tpe_now.strftime("%H:%M:%S %m/%d/%Y")
@@ -183,7 +185,6 @@ if not reminders:
     st.info("💡 目前沒有待辦提醒事項。請從左側新增！")
 else:
     for r in reminders:
-        # 使用 st.container(border=True) 產生卡片視覺效果
         with st.container(border=True):
             col1, col2, col3 = st.columns([5, 3, 2])
             with col1:
@@ -199,17 +200,15 @@ else:
                 orig_dt = datetime.datetime.strptime(r['remind_time'], "%Y-%m-%d %H:%M:%S")
                 
                 edit_content = st.text_input("修改內容", value=r['content'], key=f"ec_{r['id']}")
-                edit_date = st.date_input("修改日期", value=orig_dt.date(), key=f"ed_{r['id']}")
                 
-                ecol1, ecol2, ecol3 = st.columns(3)
+                # 同樣升級為原生 Date 與 Time Input
+                ecol1, ecol2 = st.columns(2)
                 with ecol1:
-                    e_h_val = st.selectbox("小時", [f"{i:02d}" for i in range(24)], index=orig_dt.hour, key=f"eh_{r['id']}")
+                    edit_date = st.date_input("修改日期", value=orig_dt.date(), key=f"ed_{r['id']}")
                 with ecol2:
-                    e_m1_val = st.selectbox("分(十位)", [str(i) for i in range(6)], index=orig_dt.minute // 10, key=f"em1_{r['id']}")
-                with ecol3:
-                    e_m2_val = st.selectbox("分(個位)", [str(i) for i in range(10)], index=orig_dt.minute % 10, key=f"em2_{r['id']}")
+                    edit_time = st.time_input("修改時間", value=orig_dt.time(), key=f"et_{r['id']}")
                     
-                new_time_str = f"{edit_date} {e_h_val}:{e_m1_val}{e_m2_val}:00"
+                new_time_str = f"{edit_date} {edit_time.strftime('%H:%M')}:00"
                 
                 if st.button("💾 儲存修改", key=f"save_{r['id']}", use_container_width=True):
                     db_manager.update_reminder(r['id'], edit_content, new_time_str)
