@@ -1,8 +1,8 @@
 # ==========================================================
 # ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 # 專案名稱 : 提醒備忘系統 - 網頁主程式 (Telegram 深色戰情室 UI 版)
-# 檔案名稱 : RMDR_app.py
-# 程式版本 : v2.0.2 (RWD 手機適配與原生時間選擇器優化)
+# 檔案名稱 : app.py
+# 程式版本 : v2.1.0 (新增單次與週期任務分頁管理、優化 UI)
 # ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 # ==========================================================
 
@@ -12,10 +12,10 @@ import json
 import urllib.request
 import os
 from modules import db_manager
-from modules import scheduler  # 引入排程器
+from modules import scheduler
 
 # ==========================================================
-# 1️⃣ 🚀 頁面設定 (加入 initial_sidebar_state="auto" 讓手機自動收折)
+# 1️⃣ 🚀 頁面設定
 # ==========================================================
 st.set_page_config(
     page_title="提醒備忘系統", 
@@ -25,7 +25,7 @@ st.set_page_config(
 )
 
 # ==========================================================
-# 2️⃣ 🎨 注入純淨 CSS 
+# 2️⃣ 🎨 注入純淨 CSS (維持戰情室風格並優化頁籤)
 # ==========================================================
 st.markdown(r'''
 <style>
@@ -37,60 +37,35 @@ html, body, [data-testid="stAppViewContainer"] {
 }
 header[data-testid="stHeader"] { background-color: transparent !important; }
 .main .block-container { padding-top: 1.5rem !important; margin-top: -30px !important; }
-
-/* 側邊欄與容器框線視覺 */
-[data-testid="stSidebar"] { 
-    background-color: #171a23 !important; 
-    border-right: 1px solid #2d3748 !important; 
-}
-[data-testid="stVerticalBlockBorderWrapper"] { 
-    background-color: #1e293b !important; 
-    border: 1px solid #94a3b8 !important; 
-    border-radius: 12px !important; 
-    padding: 15px !important; 
-    margin-bottom: 10px !important; 
-}
-[data-testid="collapsedControl"] svg, [data-testid="stSidebarCollapseButton"] svg { 
-    color: #ffffff !important; fill: #ffffff !important; 
-}
-
-/* 輸入框與選單視覺 */
-.stTextInput div[data-baseweb="input"], .stSelectbox div[data-baseweb="select"] > div { 
-    background-color: #0f172a !important; 
-    border: 1px solid #475569 !important; 
-    border-radius: 8px !important;  
-}
+[data-testid="stSidebar"] { background-color: #171a23 !important; border-right: 1px solid #2d3748 !important; }
+[data-testid="stVerticalBlockBorderWrapper"] { background-color: #1e293b !important; border: 1px solid #94a3b8 !important; border-radius: 12px !important; padding: 15px !important; margin-bottom: 10px !important; }
+[data-testid="collapsedControl"] svg, [data-testid="stSidebarCollapseButton"] svg { color: #ffffff !important; fill: #ffffff !important; }
+.stTextInput div[data-baseweb="input"], .stSelectbox div[data-baseweb="select"] > div { background-color: #0f172a !important; border: 1px solid #475569 !important; border-radius: 8px !important;  }
 .stTextInput input { color: #ffffff !important; background-color: transparent !important; }
 .stSelectbox div[data-baseweb="select"] span { color: #ffffff !important; }
 [data-testid="stSidebar"] h3 { color: #ffffff !important; font-size: 1.1rem !important; font-weight: 700 !important; margin-bottom: 15px !important; margin-top: 0px !important; }
 [data-testid="stWidgetLabel"] p, div[data-testid="stMarkdownContainer"] p { color: #cbd5e1 !important; font-weight: 600 !important; font-size: 0.95rem !important; }
-
-/* 按鈕：漸層藍色與 Hover 效果 */
-.stButton > button { 
-    background: linear-gradient(135deg, #3b82f6, #1d4ed8) !important; 
-    color: white !important; border: none !important; border-radius: 8px !important; font-weight: 600 !important; transition: all 0.2s ease !important; 
-}
+.stButton > button { background: linear-gradient(135deg, #3b82f6, #1d4ed8) !important; color: white !important; border: none !important; border-radius: 8px !important; font-weight: 600 !important; transition: all 0.2s ease !important; }
 .stButton > button:hover { box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4) !important; transform: translateY(-1px) !important; }
-
-/* 主標題樣式 */
 h1.main-title { color: #f8fafc; font-weight: 800; text-align: left; padding-bottom: 10px; border-bottom: 2px solid #1e293b; margin-bottom: 20px; font-size: 1.8rem; }
+/* 頁籤樣式優化 */
+.stTabs [data-baseweb="tab-list"] { gap: 8px; }
+.stTabs [data-baseweb="tab"] { background-color: #1e293b; border-radius: 8px 8px 0 0; padding: 10px 20px; border: 1px solid #475569; border-bottom: none; }
+.stTabs [aria-selected="true"] { background-color: #3b82f6; border-color: #3b82f6; }
 </style>
 ''', unsafe_allow_html=True)
 
 # ==========================================================
-# 3️⃣ ⚙️ 初始化與 Telegram API 設定
+# 3️⃣ ⚙️ 初始化與設定
 # ==========================================================
-APP_VERSION = "v2.0.2"
-
-# 設定台灣時區 (UTC+8)
+APP_VERSION = "v2.1.0"
 TW_TZ = datetime.timezone(datetime.timedelta(hours=8))
 
-# 建立專屬的 Telegram 發送函數 (區隔股票機械人)
+# 建立專屬的 Telegram 發送函數
 def send_telegram_rmdr(message):
     token = None
     chat_id = None
     try:
-        # 使用 RMDR 專屬的 Token，避免與股市警報混淆
         token = st.secrets.get("TELEGRAM_RMDR_TOKEN", os.environ.get('TELEGRAM_RMDR_TOKEN'))
         chat_id = st.secrets.get("TELEGRAM_RMDR_CHAT_ID", os.environ.get('TELEGRAM_RMDR_CHAT_ID'))
     except: pass
@@ -107,10 +82,10 @@ def send_telegram_rmdr(message):
     except Exception as e: 
         return False, f"Telegram 發送失敗: {e}"
 
-# 1. 初始化資料庫
+# 初始化資料庫
 db_manager.init_db()
 
-# 2. 啟動背景自動排程器
+# 啟動背景自動排程器
 @st.cache_resource
 def init_scheduler():
     scheduler.start_background_task()
@@ -119,36 +94,59 @@ def init_scheduler():
 init_scheduler()
 
 # ==========================================================
-# 4️⃣ 📱 UI 渲染 - 側邊欄
+# 4️⃣ 📱 UI 渲染 - 側邊欄 (動態表單)
 # ==========================================================
 with st.sidebar:
     with st.container(border=True):
         st.markdown("### ➕ 新增備忘錄")
-        st.markdown("<div style='color:#38bdf8; font-size:1.0rem; font-weight:700; margin-bottom:5px;'>✍️ 設定內容與時間</div>", unsafe_allow_html=True)
+        
+        task_type = st.radio("📌 任務類型", ["單次提醒", "週期提醒"], horizontal=True)
+        content = st.text_input("備忘內容", placeholder="例如：下午三點開會或每月繳費")
         
         now_in_tw = datetime.datetime.now(TW_TZ)
         
-        content = st.text_input("備忘內容", placeholder="例如：下午三點開會")
-        
-        # 升級為原生 Date 與 Time Input (解決手機截斷問題)
-        col1, col2 = st.columns(2)
-        with col1:
-            remind_date = st.date_input("提醒日期", now_in_tw.date())
-        with col2:
+        if task_type == "單次提醒":
+            col1, col2 = st.columns(2)
+            with col1:
+                remind_date = st.date_input("提醒日期", now_in_tw.date())
+            with col2:
+                remind_time = st.time_input("設定時間", now_in_tw.time())
+            
+            # 單次任務參數
+            remind_time_str = f"{remind_date} {remind_time.strftime('%H:%M')}:00"
+            is_recurring = 0
+            recurrence_type = ""
+            recurrence_value = ""
+            
+        else:
+            col_type, col_val = st.columns(2)
+            with col_type:
+                recurrence_type = st.selectbox("週期", ["每天", "每月", "每年"])
+            with col_val:
+                if recurrence_type == "每天":
+                    st.info("每日固定觸發")
+                    recurrence_value = "daily"
+                elif recurrence_type == "每月":
+                    recurrence_value = st.number_input("日期 (1-31)", min_value=1, max_value=31, value=1)
+                elif recurrence_type == "每年":
+                    recurrence_value = st.text_input("月/日 (MM-DD)", placeholder="例如: 05-01")
+            
             remind_time = st.time_input("設定時間", now_in_tw.time())
             
-        # 組合字串並固定秒數為 00
-        remind_time_str = f"{remind_date} {remind_time.strftime('%H:%M')}:00"
-        
+            # 週期任務我們先設定一個初始計算用的 dummy_time
+            remind_time_str = f"{now_in_tw.date()} {remind_time.strftime('%H:%M')}:00" 
+            is_recurring = 1
+            recurrence_type = recurrence_type
+            recurrence_value = str(recurrence_value)
+
         if st.button("➕ 確認新增", use_container_width=True):
             if content:
-                db_manager.add_reminder(content, remind_time_str)
-                st.success(f"✅ 成功新增提醒：{remind_time_str}")
+                db_manager.add_reminder(content, remind_time_str, is_recurring, recurrence_type, recurrence_value)
+                st.success("✅ 成功新增任務！")
                 st.rerun()
             else:
                 st.error("⚠️ 內容不能為空！")
                 
-    # 測試推播功能區塊
     with st.container(border=True):
         st.markdown("### 🛠️ 測試 Telegram 通訊")
         if st.button("發送測試訊息", use_container_width=True):
@@ -175,42 +173,61 @@ with st.sidebar:
     )
 
 # ==========================================================
-# 5️⃣ 📈 UI 渲染 - 主畫面清單
+# 5️⃣ 📈 UI 渲染 - 主畫面清單 (雙頁籤)
 # ==========================================================
 st.markdown('<h1 class="main-title">⏰ 我的提醒備忘錄清單</h1>', unsafe_allow_html=True)
 
+tab1, tab2 = st.tabs(["📅 單次待辦清單", "🔁 週期任務管理"])
+
 reminders = db_manager.get_all_reminders()
 
-if not reminders:
-    st.info("💡 目前沒有待辦提醒事項。請從左側新增！")
-else:
-    for r in reminders:
-        with st.container(border=True):
-            col1, col2, col3 = st.columns([5, 3, 2])
-            with col1:
-                st.markdown(f"<span style='color:#f1f5f9; font-size:1.1rem; font-weight:700;'>📝 {r['content']}</span>", unsafe_allow_html=True)
-            with col2:
+# 整理分類資料 (過濾掉已發送的單次任務)
+single_tasks = [r for r in reminders if not r.get('is_recurring') and r.get('status') == 'pending']
+recurring_tasks = [r for r in reminders if r.get('is_recurring')]
+
+def render_task(r):
+    with st.container(border=True):
+        col1, col2, col3 = st.columns([5, 3, 2])
+        with col1:
+            icon = "🔁" if r.get('is_recurring') else "📝"
+            st.markdown(f"<span style='color:#f1f5f9; font-size:1.1rem; font-weight:700;'>{icon} {r['content']}</span>", unsafe_allow_html=True)
+        with col2:
+            if r.get('is_recurring'):
+                info = f"{r['recurrence_type']} ({r['recurrence_value']}) {r['remind_time'][-8:]}"
+                st.markdown(f"<span style='color:#10b981; font-size:0.95rem; font-weight:600;'>設定規則: {info}</span>", unsafe_allow_html=True)
+            else:
                 st.markdown(f"<span style='color:#38bdf8; font-size:1.0rem; font-weight:600;'>🕒 {r['remind_time']}</span>", unsafe_allow_html=True)
-            with col3:
-                if st.button("🗑️ 刪除", key=f"del_{r['id']}", use_container_width=True):
-                    db_manager.delete_reminder(r['id'])
-                    st.rerun()
+        with col3:
+            if st.button("🗑️ 刪除", key=f"del_{r['id']}", use_container_width=True):
+                db_manager.delete_reminder(r['id'])
+                st.rerun()
             
-            with st.expander("✏️ 修改這筆備忘錄"):
-                orig_dt = datetime.datetime.strptime(r['remind_time'], "%Y-%m-%d %H:%M:%S")
-                
-                edit_content = st.text_input("修改內容", value=r['content'], key=f"ec_{r['id']}")
-                
-                # 同樣升級為原生 Date 與 Time Input
-                ecol1, ecol2 = st.columns(2)
-                with ecol1:
-                    edit_date = st.date_input("修改日期", value=orig_dt.date(), key=f"ed_{r['id']}")
-                with ecol2:
-                    edit_time = st.time_input("修改時間", value=orig_dt.time(), key=f"et_{r['id']}")
+            # 單次任務保留編輯功能
+            if not r.get('is_recurring'):
+                with st.expander("✏️ 修改這筆備忘錄"):
+                    orig_dt = datetime.datetime.strptime(r['remind_time'], "%Y-%m-%d %H:%M:%S")
                     
-                new_time_str = f"{edit_date} {edit_time.strftime('%H:%M')}:00"
-                
-                if st.button("💾 儲存修改", key=f"save_{r['id']}", use_container_width=True):
-                    db_manager.update_reminder(r['id'], edit_content, new_time_str)
-                    st.success("✅ 修改成功！")
-                    st.rerun()
+                    edit_content = st.text_input("修改內容", value=r['content'], key=f"ec_{r['id']}")
+                    
+                    ecol1, ecol2 = st.columns(2)
+                    with ecol1:
+                        edit_date = st.date_input("修改日期", value=orig_dt.date(), key=f"ed_{r['id']}")
+                    with ecol2:
+                        edit_time = st.time_input("修改時間", value=orig_dt.time(), key=f"et_{r['id']}")
+                        
+                    new_time_str = f"{edit_date} {edit_time.strftime('%H:%M')}:00"
+                    
+                    if st.button("💾 儲存修改", key=f"save_{r['id']}", use_container_width=True):
+                        db_manager.update_reminder(r['id'], edit_content, new_time_str)
+                        st.success("✅ 修改成功！")
+                        st.rerun()
+
+with tab1:
+    if not single_tasks: st.info("💡 目前沒有待辦的單次提醒事項。")
+    else: 
+        for r in single_tasks: render_task(r)
+
+with tab2:
+    if not recurring_tasks: st.info("💡 目前沒有週期性任務。")
+    else:
+        for r in recurring_tasks: render_task(r)
