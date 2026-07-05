@@ -2,7 +2,7 @@
 # ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 # 專案名稱 : 提醒備忘系統 - 網頁主程式 (Telegram 深色戰情室 UI 版)
 # 檔案名稱 : app.py
-# 程式版本 : v2.2.0 (防跳動記憶、4欄位 UI 與手動格式對齊)
+# 程式版本 : v2.2.1 (修正手動測試名稱連動)
 # ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 # ==========================================================
 
@@ -50,11 +50,11 @@ h1.main-title { color: #f8fafc; font-weight: 800; text-align: left; padding-bott
 # ==========================================================
 # 3️⃣ ⚙️ 初始化與設定
 # ==========================================================
-APP_VERSION = "v2.2.0"
+APP_VERSION = "v2.2.1"
 TW_TZ = datetime.timezone(datetime.timedelta(hours=8))
 now_in_tw = datetime.datetime.now(TW_TZ)
 
-# 【關鍵修復】防止時間跳動的 session_state 初始化
+# 防止時間跳動的 session_state 初始化
 if "init_date" not in st.session_state:
     st.session_state.init_date = now_in_tw.date()
 if "init_time" not in st.session_state:
@@ -94,7 +94,7 @@ with st.sidebar:
         
         if task_type == "單次提醒":
             col1, col2 = st.columns(2)
-            with col1: # 帶入 session_state 記憶
+            with col1:
                 remind_date = st.date_input("提醒日期", value=st.session_state.init_date, key="new_d")
             with col2:
                 remind_time = st.time_input("設定時間", value=st.session_state.init_time, key="new_t")
@@ -131,12 +131,33 @@ with st.sidebar:
     with st.container(border=True):
         st.markdown("### 🛠️ 測試 Telegram")
         if st.button("發送測試訊息", use_container_width=True):
-            # 【格式化】對齊自動發送格式，並加上⭐手動測試
+            # 取得當前設定時間與連動名稱
             test_dt_str = now_in_tw.strftime("%Y-%m-%d %H:%M")
-            test_msg = f"📌{test_dt_str}\n📁會議\n⭐手動測試"
+            display_content = content if content else "[未輸入內容]"
+            
+            # 依據上方選擇的任務類型來決定手動測試圖示
+            test_icon = "🔁" if task_type == "週期提醒" else "📌"
+            
+            test_msg = f"{test_icon}{test_dt_str}\n📁{display_content}\n⭐手動測試"
             success, msg = send_telegram_rmdr(test_msg)
             if success: st.success("✅ 發送成功！")
             else: st.error(msg)
+
+    # 系統狀態卡片
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    tpe_now = now_utc.astimezone(TW_TZ)
+    tpe_time_str = tpe_now.strftime("%H:%M:%S %m/%d/%Y")
+
+    st.markdown(
+        f"""
+        <div style="background-color:#1e293b; padding:12px; border-radius:8px; border:1px solid #475569; text-align:center; margin-top:15px; margin-bottom:15px;">
+            <div style="color:#94a3b8; font-size:0.8rem; font-weight:600; margin-bottom:4px;">系統當前版本</div>
+            <div style="color:#38bdf8; font-size:1.1rem; font-weight:700; margin-bottom:10px;">{APP_VERSION}</div>
+            <div style="color:#94a3b8; font-size:0.8rem; font-weight:600; margin-bottom:8px;">🕒 系統當前時間</div>
+            <div style="color:#f1f5f9; font-size:0.88rem; font-weight:600; margin-bottom:2px;">Tw {tpe_time_str}</div>
+        </div>
+        """, unsafe_allow_html=True
+    )
 
 # ==========================================================
 # 5️⃣ 📈 UI 渲染 - 主畫面清單 (4欄並排 + 原地修改)
@@ -150,10 +171,9 @@ recurring_tasks = [r for r in reminders if r.get('is_recurring')]
 
 def render_task(r):
     with st.container(border=True):
-        # 建立 4 欄：內容(5) | 時間(4) | 刪除(1.5) | 修改(1.5)
         col1, col2, col3, col4 = st.columns([5, 4, 1.5, 1.5])
         
-        display_time = r['remind_time'][:16] # 去掉秒數
+        display_time = r['remind_time'][:16]
         icon = "🔁" if r.get('is_recurring') else "📝"
         
         with col1:
@@ -168,7 +188,6 @@ def render_task(r):
                 db_manager.delete_reminder(r['id'])
                 st.rerun()
         with col4:
-            # 修改按鈕切換狀態
             if st.button("✏️ 修改", key=f"btn_edit_{r['id']}", use_container_width=True):
                 st.session_state[f"edit_{r['id']}"] = not st.session_state.get(f"edit_{r['id']}", False)
                 st.rerun()
@@ -191,11 +210,11 @@ def render_task(r):
             with scol1:
                 if st.button("💾 儲存修改", key=f"save_{r['id']}", use_container_width=True):
                     db_manager.update_reminder(r['id'], edit_content, new_time_str)
-                    st.session_state[f"edit_{r['id']}"] = False # 儲存後自動關閉展開
+                    st.session_state[f"edit_{r['id']}"] = False
                     st.rerun()
             with scol2:
                 if st.button("❌ 取消", key=f"cancel_{r['id']}", use_container_width=True):
-                    st.session_state[f"edit_{r['id']}"] = False # 取消後關閉
+                    st.session_state[f"edit_{r['id']}"] = False
                     st.rerun()
 
 with tab1:
@@ -204,6 +223,6 @@ with tab1:
         for r in single_tasks: render_task(r)
 
 with tab2:
-    if not recurring_tasks: st.info("💡 目前沒有週期性任務。")
+    if not recurring_tasks: st.info("💡 目前記憶中沒有任何固定發生的週期任務。")
     else:
         for r in recurring_tasks: render_task(r)
