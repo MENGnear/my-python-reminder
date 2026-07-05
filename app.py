@@ -2,7 +2,7 @@
 # ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 # 專案名稱 : 提醒備忘系統 - 網頁主程式 (Telegram 深色戰情室 UI 版)
 # 檔案名稱 : app.py
-# 程式版本 : v2.2.1 (修正手動測試名稱連動)
+# 程式版本 : v2.2.2 (回歸 config.toml 配色、重組週期三列佈局)
 # ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 # ==========================================================
 
@@ -25,23 +25,54 @@ st.set_page_config(
 )
 
 # ==========================================================
-# 2️⃣ 🎨 注入純淨 CSS 
+# 2️⃣ 🎨 注入純淨 CSS (僅保留裝飾與邊框，不干擾 config.toml 字體顏色)
 # ==========================================================
 st.markdown(r'''
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-html, body, [data-testid="stAppViewContainer"] { font-family: 'Inter', sans-serif !important; background-color: #0e1117 !important; color: #f1f5f9 !important; }
+
+/* 全域字型設定 */
+html, body, [data-testid="stAppViewContainer"] { 
+    font-family: 'Inter', sans-serif !important; 
+}
+
 header[data-testid="stHeader"] { background-color: transparent !important; }
 .main .block-container { padding-top: 1.5rem !important; margin-top: -30px !important; }
-[data-testid="stSidebar"] { background-color: #171a23 !important; border-right: 1px solid #2d3748 !important; }
-[data-testid="stVerticalBlockBorderWrapper"] { background-color: #1e293b !important; border: 1px solid #94a3b8 !important; border-radius: 12px !important; padding: 15px !important; margin-bottom: 10px !important; }
-.stTextInput div[data-baseweb="input"], .stSelectbox div[data-baseweb="select"] > div { background-color: #0f172a !important; border: 1px solid #475569 !important; border-radius: 8px !important; }
-.stTextInput input { color: #ffffff !important; background-color: transparent !important; }
-.stButton > button { background: linear-gradient(135deg, #3b82f6, #1d4ed8) !important; color: white !important; border: none !important; border-radius: 8px !important; font-weight: 600 !important; transition: all 0.2s ease !important; }
-.stButton > button:hover { box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4) !important; transform: translateY(-1px) !important; }
-h1.main-title { color: #f8fafc; font-weight: 800; text-align: left; padding-bottom: 10px; border-bottom: 2px solid #1e293b; margin-bottom: 20px; font-size: 1.8rem; }
-.stTabs [data-baseweb="tab"] { background-color: #1e293b; border-radius: 8px 8px 0 0; padding: 10px 20px; border: 1px solid #475569; border-bottom: none; }
-.stTabs [aria-selected="true"] { background-color: #3b82f6; border-color: #3b82f6; }
+
+/* 區塊容器細節美化 */
+[data-testid="stVerticalBlockBorderWrapper"] { 
+    background-color: #1e293b !important; 
+    border: 1px solid #475569 !important; 
+    border-radius: 12px !important; 
+    padding: 15px !important; 
+    margin-bottom: 10px !important; 
+}
+
+/* 戰情室專屬漸層按鈕 */
+.stButton > button { 
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8) !important; 
+    color: white !important; 
+    border: none !important; 
+    border-radius: 8px !important; 
+    font-weight: 600 !important; 
+    transition: all 0.2s ease !important; 
+}
+.stButton > button:hover { 
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4) !important; 
+    transform: translateY(-1px) !important; 
+}
+
+/* 主標題樣式 */
+h1.main-title { 
+    color: #f8fafc; 
+    font-weight: 800; 
+    text-align: left; 
+    padding-bottom: 10px; 
+    border-bottom: 2px solid #1e293b; 
+    margin-bottom: 20px; 
+    font-size: 1.8rem; 
+}
+
 /* 垂直置中輔助 */
 .valign-text { margin-top: 6px; }
 </style>
@@ -50,7 +81,7 @@ h1.main-title { color: #f8fafc; font-weight: 800; text-align: left; padding-bott
 # ==========================================================
 # 3️⃣ ⚙️ 初始化與設定
 # ==========================================================
-APP_VERSION = "v2.2.1"
+APP_VERSION = "v2.2.2"
 TW_TZ = datetime.timezone(datetime.timedelta(hours=8))
 now_in_tw = datetime.datetime.now(TW_TZ)
 
@@ -83,7 +114,7 @@ def init_scheduler():
 init_scheduler()
 
 # ==========================================================
-# 4️⃣ 📱 UI 渲染 - 側邊欄 
+# 4️⃣ 📱 UI 渲染 - 側邊欄 (全新佈局)
 # ==========================================================
 with st.sidebar:
     with st.container(border=True):
@@ -103,19 +134,23 @@ with st.sidebar:
             is_recurring, recurrence_type, recurrence_value = 0, "", ""
             
         else:
-            col_type, col_val = st.columns(2)
-            with col_type:
-                recurrence_type = st.selectbox("週期", ["每天", "每月", "每年"])
-            with col_val:
-                if recurrence_type == "每天":
-                    st.info("每日固定觸發")
-                    recurrence_value = "daily"
-                elif recurrence_type == "每月":
-                    recurrence_value = st.number_input("日期 (1-31)", min_value=1, max_value=31, value=1)
-                elif recurrence_type == "每年":
-                    recurrence_value = st.text_input("月/日 (MM-DD)", placeholder="例如: 05-01")
+            # 🔁 週期提醒：嚴格整合為等寬垂直向下生長的三列結構
             
+            # a. 週期 (第一列)
+            recurrence_type = st.selectbox("週期", ["每天", "每月", "每年"], key="recur_type_sel")
+            
+            # b. 週期對應參數 (第二列)
+            if recurrence_type == "每天":
+                st.text_input("執行頻率", value="每日發送", disabled=True, key="recur_val_daily")
+                recurrence_value = "daily"
+            elif recurrence_type == "每月":
+                recurrence_value = st.number_input("日期 (1-31)", min_value=1, max_value=31, value=1, key="recur_val_monthly")
+            elif recurrence_type == "每年":
+                recurrence_value = st.text_input("月/日 (MM-DD)", placeholder="例如: 05-01", key="recur_val_yearly")
+            
+            # c. 設定時間 (第三列)
             remind_time = st.time_input("設定時間", value=st.session_state.init_time, key="new_rt")
+            
             remind_time_str = f"{now_in_tw.date()} {remind_time.strftime('%H:%M')}:00" 
             is_recurring = 1
             recurrence_value = str(recurrence_value)
@@ -131,11 +166,8 @@ with st.sidebar:
     with st.container(border=True):
         st.markdown("### 🛠️ 測試 Telegram")
         if st.button("發送測試訊息", use_container_width=True):
-            # 取得當前設定時間與連動名稱
             test_dt_str = now_in_tw.strftime("%Y-%m-%d %H:%M")
             display_content = content if content else "[未輸入內容]"
-            
-            # 依據上方選擇的任務類型來決定手動測試圖示
             test_icon = "🔁" if task_type == "週期提醒" else "📌"
             
             test_msg = f"{test_icon}{test_dt_str}\n📁{display_content}\n⭐手動測試"
@@ -177,7 +209,7 @@ def render_task(r):
         icon = "🔁" if r.get('is_recurring') else "📝"
         
         with col1:
-            st.markdown(f"<div class='valign-text'><span style='color:#f1f5f9; font-size:1.1rem; font-weight:700;'>{icon} {r['content']}</span></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='valign-text'><span style='font-size:1.1rem; font-weight:700;'>{icon} {r['content']}</span></div>", unsafe_allow_html=True)
         with col2:
             if r.get('is_recurring'):
                 st.markdown(f"<div class='valign-text'><span style='color:#10b981; font-size:0.95rem; font-weight:600;'>🕒 {display_time} ({r['recurrence_type']})</span></div>", unsafe_allow_html=True)
