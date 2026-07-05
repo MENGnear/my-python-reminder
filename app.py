@@ -1,9 +1,9 @@
 # ==========================================================
-# ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
+# ⭐⭐⭐⭐⭐⭐⭐⭐⭐•
 # 專案名稱 : 提醒備忘系統 - 網頁主程式 (Telegram 深色戰情室 UI 版)
 # 檔案名稱 : app.py
-# 程式版本 : v2.2.2 (回歸 config.toml 配色、重組週期三列佈局)
-# ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
+# 程式版本 : v2.2.3 (單次提醒改為兩列滿寬平鋪結構)
+# ⭐⭐⭐⭐⭐⭐⭐⭐⭐•
 # ==========================================================
 
 import streamlit as st
@@ -81,7 +81,7 @@ h1.main-title {
 # ==========================================================
 # 3️⃣ ⚙️ 初始化與設定
 # ==========================================================
-APP_VERSION = "v2.2.2"
+APP_VERSION = "v2.2.3"
 TW_TZ = datetime.timezone(datetime.timedelta(hours=8))
 now_in_tw = datetime.datetime.now(TW_TZ)
 
@@ -114,7 +114,7 @@ def init_scheduler():
 init_scheduler()
 
 # ==========================================================
-# 4️⃣ 📱 UI 渲染 - 側邊欄 (全新佈局)
+# 4️⃣ 📱 UI 渲染 - 側邊欄 
 # ==========================================================
 with st.sidebar:
     with st.container(border=True):
@@ -124,17 +124,19 @@ with st.sidebar:
         content = st.text_input("備忘內容", placeholder="例如：下午三點開會或每月繳費")
         
         if task_type == "單次提醒":
-            col1, col2 = st.columns(2)
-            with col1:
-                remind_date = st.date_input("提醒日期", value=st.session_state.init_date, key="new_d")
-            with col2:
-                remind_time = st.time_input("設定時間", value=st.session_state.init_time, key="new_t")
+            # 📌 單次提醒：改為滿寬垂直向下平鋪的兩列結構，與週期提醒格式一致
+            
+            # 1. 提醒日期 (第一列)
+            remind_date = st.date_input("提醒日期", value=st.session_state.init_date, key="new_d")
+            
+            # 2. 設定時間 (第二列)
+            remind_time = st.time_input("設定時間", value=st.session_state.init_time, key="new_t")
             
             remind_time_str = f"{remind_date} {remind_time.strftime('%H:%M')}:00"
             is_recurring, recurrence_type, recurrence_value = 0, "", ""
             
         else:
-            # 🔁 週期提醒：嚴格整合為等寬垂直向下生長的三列結構
+            # 🔁 週期提醒：維持等寬垂直向下生長的三列結構
             
             # a. 週期 (第一列)
             recurrence_type = st.selectbox("週期", ["每天", "每月", "每年"], key="recur_type_sel")
