@@ -2,14 +2,13 @@
 # ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 # 專案名稱 : 提醒備忘系統 - 資料庫管理模組
 # 檔案名稱 : db_manager.py
-# 程式版本 : v2.1.0 (擴充週期任務支援與對齊 app.py 命名)
+# 程式版本 : v2.2.0
 # ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 # ==========================================================
 
 import sqlite3
 from datetime import datetime
 
-# 設定資料庫檔案名稱
 DB_PATH = 'reminders.db'
 
 def get_connection():
@@ -17,7 +16,7 @@ def get_connection():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
 
 def init_db():
-    """初始化資料庫與資料表 (v2.1.0 擴充週期任務欄位)"""
+    """初始化資料庫與資料表"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('''
@@ -59,7 +58,7 @@ def get_all_reminders():
     return results
 
 def update_status(reminder_id, status):
-    """更新備忘錄狀態 (Update) - 推播後使用"""
+    """更新備忘錄狀態 (Update) - v2.2.0 加入 processing 狀態防護"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE reminders SET status = ? WHERE id = ?", (status, reminder_id))
@@ -67,7 +66,7 @@ def update_status(reminder_id, status):
     conn.close()
 
 def update_reminder(reminder_id, new_content, new_time):
-    """修改備忘錄內容與時間 (Update) - 網頁編輯使用 (已對齊 app.py 的命名)"""
+    """修改備忘錄內容與時間 (Update)"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -78,10 +77,9 @@ def update_reminder(reminder_id, new_content, new_time):
     conn.close()
     
 def update_reminder_time(reminder_id, new_time):
-    """更新備忘錄觸發時間 (Update) - 排程器週期推算使用"""
+    """更新備忘錄觸發時間 (Update) - 週期推算後重設為 pending"""
     conn = get_connection()
     cursor = conn.cursor()
-    # 週期任務自動推算下次時間後，需要將狀態重設回 pending，排程器才會再次抓取
     cursor.execute(
         "UPDATE reminders SET remind_time = ?, status = 'pending' WHERE id = ?", 
         (new_time, reminder_id)
