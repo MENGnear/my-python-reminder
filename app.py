@@ -1,9 +1,9 @@
 # ==========================================================
-# ⭐⭐⭐⭐⭐⭐⭐⭐⭐•
+# ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 # 專案名稱 : 提醒備忘系統 - 網頁主程式 (Telegram 深色戰情室 UI 版)
 # 檔案名稱 : app.py
-# 程式版本 : v2.2.3 (單次提醒改為兩列滿寬平鋪結構)
-# ⭐⭐⭐⭐⭐⭐⭐⭐⭐•
+# 程式版本 : v2.2.4 (對齊手動發送格式與圖示空格)
+# ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 # ==========================================================
 
 import streamlit as st
@@ -81,7 +81,7 @@ h1.main-title {
 # ==========================================================
 # 3️⃣ ⚙️ 初始化與設定
 # ==========================================================
-APP_VERSION = "v2.2.3"
+APP_VERSION = "v2.2.4"
 TW_TZ = datetime.timezone(datetime.timedelta(hours=8))
 now_in_tw = datetime.datetime.now(TW_TZ)
 
@@ -114,7 +114,7 @@ def init_scheduler():
 init_scheduler()
 
 # ==========================================================
-# 4️⃣ 📱 UI 渲染 - 側邊欄 
+# 4️⃣ 📱 UI 渲染 - 側邊欄
 # ==========================================================
 with st.sidebar:
     with st.container(border=True):
@@ -124,24 +124,15 @@ with st.sidebar:
         content = st.text_input("備忘內容", placeholder="例如：下午三點開會或每月繳費")
         
         if task_type == "單次提醒":
-            # 📌 單次提醒：改為滿寬垂直向下平鋪的兩列結構，與週期提醒格式一致
-            
-            # 1. 提醒日期 (第一列)
             remind_date = st.date_input("提醒日期", value=st.session_state.init_date, key="new_d")
-            
-            # 2. 設定時間 (第二列)
             remind_time = st.time_input("設定時間", value=st.session_state.init_time, key="new_t")
             
             remind_time_str = f"{remind_date} {remind_time.strftime('%H:%M')}:00"
             is_recurring, recurrence_type, recurrence_value = 0, "", ""
             
         else:
-            # 🔁 週期提醒：維持等寬垂直向下生長的三列結構
-            
-            # a. 週期 (第一列)
             recurrence_type = st.selectbox("週期", ["每天", "每月", "每年"], key="recur_type_sel")
             
-            # b. 週期對應參數 (第二列)
             if recurrence_type == "每天":
                 st.text_input("執行頻率", value="每日發送", disabled=True, key="recur_val_daily")
                 recurrence_value = "daily"
@@ -150,7 +141,6 @@ with st.sidebar:
             elif recurrence_type == "每年":
                 recurrence_value = st.text_input("月/日 (MM-DD)", placeholder="例如: 05-01", key="recur_val_yearly")
             
-            # c. 設定時間 (第三列)
             remind_time = st.time_input("設定時間", value=st.session_state.init_time, key="new_rt")
             
             remind_time_str = f"{now_in_tw.date()} {remind_time.strftime('%H:%M')}:00" 
@@ -170,9 +160,11 @@ with st.sidebar:
         if st.button("發送測試訊息", use_container_width=True):
             test_dt_str = now_in_tw.strftime("%Y-%m-%d %H:%M")
             display_content = content if content else "[未輸入內容]"
-            test_icon = "🔁" if task_type == "週期提醒" else "📌"
             
-            test_msg = f"{test_icon}{test_dt_str}\n📁{display_content}\n⭐手動測試"
+            # 【格式優化】依據分頁聰明切換 ⏰ 或 🔄 圖示，且圖示後方皆加入半形空格
+            test_icon = "🔄" if task_type == "週期提醒" else "⏰"
+            
+            test_msg = f"{test_icon} {test_dt_str}\n📝 {display_content}\n⭐ 手動測試"
             success, msg = send_telegram_rmdr(test_msg)
             if success: st.success("✅ 發送成功！")
             else: st.error(msg)
