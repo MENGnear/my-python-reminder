@@ -2,7 +2,7 @@
 # ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 # 專案名稱 : 提醒備忘系統 - 背景排程器模組
 # 檔案名稱 : scheduler.py
-# 程式版本 : v2.2.0 (加入防重複鎖定、精準推播格式)
+# 程式版本 : v2.2.4 (優化自動發送訊息格式與圖示空格)
 # ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 # ==========================================================
 
@@ -55,17 +55,17 @@ def check_and_send_reminders():
     for r in reminders:
         if r['status'] == 'pending' and now_str >= r['remind_time']:
             
-            # 【關鍵修復】1. 先鎖定狀態為 processing，避免其他執行緒重複抓取
+            # 先鎖定狀態為 processing，避免其他執行緒重複抓取
             db_manager.update_status(r['id'], 'processing')
             
-            # 【格式化】2. 切片去掉秒數 (取前16碼: 2026-07-05 20:30)
+            # 切片去掉秒數 (取前16碼: 2026-07-05 20:30)
             display_time = r['remind_time'][:16]
             
-            # 【格式化】3. 套用精準的 UI 符號
+            # 【格式優化】套用新版自動發送格式 (補上空格，更新圖示)
             if r.get('is_recurring'):
-                msg = f"🔁{display_time}\n📁{r['content']}"
+                msg = f"🔄 {display_time}\n📝 {r['content']}"
             else:
-                msg = f"📌{display_time}\n📁{r['content']}"
+                msg = f"⏰ {display_time}\n📝 {r['content']}"
             
             # 觸發發送
             success, _ = send_telegram(msg)
