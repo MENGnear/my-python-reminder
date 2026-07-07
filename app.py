@@ -2,7 +2,11 @@
 # ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 # 專案名稱 : 提醒備忘系統 - 網頁主程式 (Telegram 深色戰情室 UI 版)
 # 檔案名稱 : app.py
-# 程式版本 : v2.2.4 (對齊手動發送格式與圖示空格)
+# 程式版本 : v2.2.5 
+# 進版說明 : 
+#   1. 升級主畫面頁籤為具備狀態連動的戰情室橫向導覽按鈕。
+#   2. 實作「測試 Telegram」按鈕的脈絡感知功能，自動判定當前頁面發送對應格式。
+#   3. 完整保留過往所有 UI 排版優化與原地修改 A 方案心血。
 # ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 # ==========================================================
 
@@ -15,7 +19,7 @@ from modules import db_manager
 from modules import scheduler
 
 # ==========================================================
-# 1️⃣ 🚀 頁面設定
+# 1️⃣ 🚀 頁面設定 (支援手機自動收折)
 # ==========================================================
 st.set_page_config(
     page_title="提醒備忘系統", 
@@ -25,7 +29,7 @@ st.set_page_config(
 )
 
 # ==========================================================
-# 2️⃣ 🎨 注入純淨 CSS (僅保留裝飾與邊框，不干擾 config.toml 字體顏色)
+# 2️⃣ 🎨 注入純淨 CSS (優化自訂導覽頁籤與按鈕外觀，不干擾 config.toml)
 # ==========================================================
 st.markdown(r'''
 <style>
@@ -48,7 +52,7 @@ header[data-testid="stHeader"] { background-color: transparent !important; }
     margin-bottom: 10px !important; 
 }
 
-/* 戰情室專屬漸層按鈕 */
+/* 戰情室專專屬漸層按鈕 */
 .stButton > button { 
     background: linear-gradient(135deg, #3b82f6, #1d4ed8) !important; 
     color: white !important; 
@@ -75,13 +79,18 @@ h1.main-title {
 
 /* 垂直置中輔助 */
 .valign-text { margin-top: 6px; }
+
+/* 方案 B 專屬：將 Radio 美化為橫向高質感頁籤按鈕 */
+div[data-testid="stSidebarUserContent"] .stRadio div[role="radiogroup"] {
+    gap: 10px;
+}
 </style>
 ''', unsafe_allow_html=True)
 
 # ==========================================================
-# 3️⃣ ⚙️ 初始化與設定
+# 3️⃣ ⚙️ 初始化與設定 (時區、Session State 與 Telegram API)
 # ==========================================================
-APP_VERSION = "v2.2.4"
+APP_VERSION = "v2.2.5"
 TW_TZ = datetime.timezone(datetime.timedelta(hours=8))
 now_in_tw = datetime.datetime.now(TW_TZ)
 
@@ -91,6 +100,7 @@ if "init_date" not in st.session_state:
 if "init_time" not in st.session_state:
     st.session_state.init_time = now_in_tw.time()
 
+# Telegram 訊息發送底層函式
 def send_telegram_rmdr(message):
     token = st.secrets.get("TELEGRAM_RMDR_TOKEN", os.environ.get('TELEGRAM_RMDR_TOKEN'))
     chat_id = st.secrets.get("TELEGRAM_RMDR_CHAT_ID", os.environ.get('TELEGRAM_RMDR_CHAT_ID'))
@@ -104,8 +114,10 @@ def send_telegram_rmdr(message):
         return True, "發送成功"
     except Exception as e: return False, f"失敗: {e}"
 
+# 載入資料庫
 db_manager.init_db()
 
+# 啟動自動排程器 (確保背景唯一執行緒)
 @st.cache_resource
 def init_scheduler():
     scheduler.start_background_task()
@@ -114,7 +126,7 @@ def init_scheduler():
 init_scheduler()
 
 # ==========================================================
-# 4️⃣ 📱 UI 渲染 - 側邊欄
+# 4️⃣ 📱 UI 渲染 - 側邊欄 (控制區表單與脈絡測試按鈕)
 # ==========================================================
 with st.sidebar:
     with st.container(border=True):
@@ -124,6 +136,7 @@ with st.sidebar:
         content = st.text_input("備忘內容", placeholder="例如：下午三點開會或每月繳費")
         
         if task_type == "單次提醒":
+            # 單次提醒垂直平鋪結構 (v2.2.3 優化)
             remind_date = st.date_input("提醒日期", value=st.session_state.init_date, key="new_d")
             remind_time = st.time_input("設定時間", value=st.session_state.init_time, key="new_t")
             
@@ -131,6 +144,7 @@ with st.sidebar:
             is_recurring, recurrence_type, recurrence_value = 0, "", ""
             
         else:
+            # 週期提醒三列滿寬垂直結構 (v2.2.2 優化)
             recurrence_type = st.selectbox("週期", ["每天", "每月", "每年"], key="recur_type_sel")
             
             if recurrence_type == "每天":
@@ -159,17 +173,24 @@ with st.sidebar:
         st.markdown("### 🛠️ 測試 Telegram")
         if st.button("發送測試訊息", use_container_width=True):
             test_dt_str = now_in_tw.strftime("%Y-%m-%d %H:%M")
-            display_content = content if content else "[未輸入內容]"
             
-            # 【格式優化】依據分頁聰明切換 ⏰ 或 🔄 圖示，且圖示後方皆加入半形空格
-            test_icon = "🔄" if task_type == "週期提醒" else "⏰"
+            # 【方案 B 核心功能】檢查主畫面當前所在的頁面名稱
+            current_tab = st.session_state.get("main_page_nav", "📅 單次待辦清單")
+            
+            # 依據主畫面所在的頁面，智慧切換發送圖示與防呆內容
+            if current_tab == "🔁 週期任務管理":
+                test_icon = "🔄"
+                display_content = content if content else "[未輸入週期內容]"
+            else:
+                test_icon = "⏰"
+                display_content = content if content else "[未輸入單次內容]"
             
             test_msg = f"{test_icon} {test_dt_str}\n📝 {display_content}\n⭐ 手動測試"
             success, msg = send_telegram_rmdr(test_msg)
             if success: st.success("✅ 發送成功！")
             else: st.error(msg)
 
-    # 系統狀態卡片
+    # 系統狀態資訊卡片
     now_utc = datetime.datetime.now(datetime.timezone.utc)
     tpe_now = now_utc.astimezone(TW_TZ)
     tpe_time_str = tpe_now.strftime("%H:%M:%S %m/%d/%Y")
@@ -186,15 +207,25 @@ with st.sidebar:
     )
 
 # ==========================================================
-# 5️⃣ 📈 UI 渲染 - 主畫面清單 (4欄並排 + 原地修改)
+# 5️⃣ 📈 UI 渲染 - 主畫面清單 (橫向導覽頁籤、4欄並排與 A 原地修改)
 # ==========================================================
 st.markdown('<h1 class="main-title">⏰ 我的提醒備忘錄清單</h1>', unsafe_allow_html=True)
-tab1, tab2 = st.tabs(["📅 單次待辦清單", "🔁 週期任務管理"])
 
+# 【方案 B 核心功能】升級為可被後端程式感知狀態的橫向導覽按鈕頁籤
+current_page = st.radio(
+    "main_nav",
+    ["📅 單次待辦清單", "🔁 週期任務管理"],
+    horizontal=True,
+    label_visibility="collapsed",
+    key="main_page_nav"  # 綁定 key，讓側邊欄測試按鈕隨時讀取
+)
+
+# 撈取資料庫數據並分類
 reminders = db_manager.get_all_reminders()
 single_tasks = [r for r in reminders if not r.get('is_recurring') and r.get('status') == 'pending']
 recurring_tasks = [r for r in reminders if r.get('is_recurring')]
 
+# 共用單筆任務渲染函式 (包含 4 欄並排與原地修改機制)
 def render_task(r):
     with st.container(border=True):
         col1, col2, col3, col4 = st.columns([5, 4, 1.5, 1.5])
@@ -218,7 +249,7 @@ def render_task(r):
                 st.session_state[f"edit_{r['id']}"] = not st.session_state.get(f"edit_{r['id']}", False)
                 st.rerun()
                 
-    # A 方案：原地展開修改區域
+    # A 方案：原地展開修改區域 (完好保護時間與日期格式)
     if st.session_state.get(f"edit_{r['id']}", False):
         with st.container(border=True):
             orig_dt = datetime.datetime.strptime(r['remind_time'], "%Y-%m-%d %H:%M:%S")
@@ -243,12 +274,15 @@ def render_task(r):
                     st.session_state[f"edit_{r['id']}"] = False
                     st.rerun()
 
-with tab1:
-    if not single_tasks: st.info("💡 目前沒有待辦的單次提醒事項。")
+# 根據當前感知到的導覽按鈕狀態，切換顯示對應資料清單
+if current_page == "📅 單次待辦清單":
+    if not single_tasks: 
+        st.info("💡 目前沒有待辦的單次提醒事項。")
     else: 
         for r in single_tasks: render_task(r)
 
-with tab2:
-    if not recurring_tasks: st.info("💡 目前記憶中沒有任何固定發生的週期任務。")
+elif current_page == "🔁 週期任務管理":
+    if not recurring_tasks: 
+        st.info("💡 目前記憶中沒有任何固定發生的週期任務。")
     else:
         for r in recurring_tasks: render_task(r)
