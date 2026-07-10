@@ -2,12 +2,12 @@
 # ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 # 專案名稱 : 提醒備忘系統 - 網頁主程式 (Telegram 深色戰情室 UI 版)
 # 檔案名稱 : app.py
-# 程式版本 : V2.2.6 (雲端特化版)
+# 程式版本 : V2.2.7 (完美除錯與防呆版)
 # 進版說明 : 
-#   1. 引入 streamlit_autorefresh 作為前端心跳，防止 SCC 休眠。
-#   2. 實作「新增成功自動清空表單」，解決殘留字串錯覺。
-#   3. 將測試按鈕移至主畫面各筆任務旁，實現 100% 精準測試發送。
-#   4. 完整保留單次兩列、週期三列與 A 方案原地修改機制。
+#   1. 【修正】導入動態 Key 計數器 (input_counter)，解決強清表單造成的 StreamlitAPIException 崩潰。
+#   2. 【新增】實作 verify_task_alive() 雙重確認機制，解決點擊過期「幽靈小卡」沒有反應的錯覺。
+#   3. 【維持】保留 streamlit_autorefresh 每 5 分鐘防休眠心跳。
+#   4. 【維持】保留主畫面 5 欄配置與單筆測試按鈕。
 # ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 # ==========================================================
 
@@ -16,9 +16,10 @@ import datetime
 import json
 import urllib.request
 import os
+import time
 from modules import db_manager
 from modules import scheduler
-from streamlit_autorefresh import st_autorefresh  # 【V2.2.6 新增】防休眠套件
+from streamlit_autorefresh import st_autorefresh
 
 # ==========================================================
 # 區塊 1：🚀 頁面設定與自訂純淨 CSS
@@ -43,19 +44,19 @@ div[data-testid="stSidebarUserContent"] .stRadio div[role="radiogroup"] { gap: 1
 # ==========================================================
 # 區塊 2：⚙️ 初始化、Session 狀態控制與 API
 # ==========================================================
-APP_VERSION = "V2.2.6"
+APP_VERSION = "V2.2.7"
 TW_TZ = datetime.timezone(datetime.timedelta(hours=8))
 now_in_tw = datetime.datetime.now(TW_TZ)
 
-# 【V2.2.6 核心功能】前端定時刷新心跳 (5分鐘刷新一次)，假裝有人在看網頁，防止伺服器休眠
+# 前端定時刷新心跳 (5分鐘刷新一次)，防止伺服器休眠與同步資料庫狀態
 st_autorefresh(interval=5 * 60 * 1000, key="app_keepalive")
 
 # 防止時間跳動的 session_state 初始化
 if "init_date" not in st.session_state: st.session_state.init_date = now_in_tw.date()
 if "init_time" not in st.session_state: st.session_state.init_time = now_in_tw.time()
 
-# 【V2.2.6 變更】：綁定輸入框清空的專屬狀態
-if "form_input_content" not in st.session_state: st.session_state.form_input_content = ""
+# 【V2.2.7 核心修正】：動態 Key 計數器 (金蟬脫殼戰術)，取代直接清空字串
+if "input_counter" not in st.session_state: st.session_state.input_counter = 0
 
 def send_telegram_rmdr(message):
     token = st.secrets.get("TELEGRAM_RMDR_TOKEN", os.environ.get('TELEGRAM_RMDR_TOKEN'))
@@ -79,6 +80,22 @@ def init_scheduler():
 
 init_scheduler()
 
+# 【V2.2.7 核心新增】：幽靈小卡雙重確認機制 (Double-Check)
+def verify_task_alive(task_id):
+    """確認該筆任務在資料庫中是否仍為 pending 狀態，防止對幽靈元件操作"""
+    all_reminders = db_manager.get_all_reminders()
+    for t in all_reminders:
+        if t['id'] == task_id:
+            if t['status'] == 'pending':
+                return True # 任務活著，允許操作
+            else:
+                break # 找到了但狀態不是 pending
+    # 如果找不到或是非 pending，代表已被排程發送或作廢
+    st.error("⚠️ 動作無效：此任務已在背景執行完畢或過期！畫面即將同步...")
+    time.sleep(1.5)
+    st.rerun()
+    return False
+
 # ==========================================================
 # 區塊 3：📱 UI 渲染 - 側邊欄控制區
 # ==========================================================
@@ -87,8 +104,10 @@ with st.sidebar:
         st.markdown("### ➕ 新增備忘錄")
         
         task_type = st.radio("📌 任務類型", ["單次提醒", "週期提醒"], horizontal=True)
-        # 綁定 session_state 以便後續新增成功時自動清空
-        content = st.text_input("備忘內容", key="form_input_content", placeholder="例如：下午三點開會或每月繳費")
+        
+        # 【V2.2.7 變更】：套用動態 Key (input_counter)
+        dynamic_key = f"form_input_{st.session_state.input_counter}"
+        content = st.text_input("備忘內容", key=dynamic_key, placeholder="例如：下午三點開會或每月繳費")
         
         if task_type == "單次提醒":
             remind_date = st.date_input("提醒日期", value=st.session_state.init_date, key="new_d")
@@ -115,13 +134,12 @@ with st.sidebar:
             if content:
                 db_manager.add_reminder(content, remind_time_str, is_recurring, recurrence_type, recurrence_value)
                 st.toast("✅ 成功新增！", icon="✅")
-                # 【V2.2.6 核心功能】新增成功後，立刻清空輸入框，避免視覺殘留
-                st.session_state.form_input_content = ""
+                # 【V2.2.7 變更】：不洗白字串，直接將計數器 +1 讓系統產生新輸入框 (金蟬脫殼)
+                st.session_state.input_counter += 1
                 st.rerun()
             else:
                 st.error("⚠️ 內容不能為空！")
                 
-    # 系統狀態卡片
     now_utc = datetime.datetime.now(datetime.timezone.utc)
     tpe_now = now_utc.astimezone(TW_TZ)
     st.markdown(
@@ -148,7 +166,6 @@ recurring_tasks = [r for r in reminders if r.get('is_recurring')]
 
 def render_task(r):
     with st.container(border=True):
-        # 【V2.2.6 變更】：版面改為 5 欄，最右側加入該筆資料專屬的測試按鈕
         col1, col2, col3, col4, col5 = st.columns([4, 3.5, 1.3, 1.2, 1.2])
         
         display_time = r['remind_time'][:16]
@@ -162,21 +179,25 @@ def render_task(r):
                 st.markdown(f"<div class='valign-text'><span style='color:#10b981; font-size:0.95rem; font-weight:600;'>🕒 {display_time} ({r['recurrence_type']})</span></div>", unsafe_allow_html=True)
             else:
                 st.markdown(f"<div class='valign-text'><span style='color:#38bdf8; font-size:1.0rem; font-weight:600;'>🕒 {display_time}</span></div>", unsafe_allow_html=True)
+        
+        # 【V2.2.7 新增】：按鈕皆綁定 verify_task_alive 雙重確認機制
         with col3:
             if st.button("🗑️ 刪除", key=f"del_{r['id']}", use_container_width=True):
-                db_manager.delete_reminder(r['id'])
-                st.rerun()
+                if verify_task_alive(r['id']):
+                    db_manager.delete_reminder(r['id'])
+                    st.rerun()
         with col4:
             if st.button("✏️ 修改", key=f"btn_edit_{r['id']}", use_container_width=True):
-                st.session_state[f"edit_{r['id']}"] = not st.session_state.get(f"edit_{r['id']}", False)
-                st.rerun()
+                if verify_task_alive(r['id']):
+                    st.session_state[f"edit_{r['id']}"] = not st.session_state.get(f"edit_{r['id']}", False)
+                    st.rerun()
         with col5:
-            # 【V2.2.6 核心功能】：單筆精準手動發送測試，完全同步資料庫格式
             if st.button("🚀 測試", key=f"test_{r['id']}", use_container_width=True):
-                test_msg = f"{icon} {display_time}\n📝 {r['content']}\n⭐ 手動測試"
-                success, msg_resp = send_telegram_rmdr(test_msg)
-                if success: st.toast("✅ 發送成功！請檢查手機", icon="✅")
-                else: st.error(f"發送失敗: {msg_resp}")
+                if verify_task_alive(r['id']):
+                    test_msg = f"{icon} {display_time}\n📝 {r['content']}\n⭐ 手動測試"
+                    success, msg_resp = send_telegram_rmdr(test_msg)
+                    if success: st.toast("✅ 發送成功！請檢查手機", icon="✅")
+                    else: st.error(f"發送失敗: {msg_resp}")
                 
     # A 方案：原地展開修改區域
     if st.session_state.get(f"edit_{r['id']}", False):
@@ -193,9 +214,10 @@ def render_task(r):
             scol1, scol2 = st.columns(2)
             with scol1:
                 if st.button("💾 儲存修改", key=f"save_{r['id']}", use_container_width=True):
-                    db_manager.update_reminder(r['id'], edit_content, new_time_str)
-                    st.session_state[f"edit_{r['id']}"] = False
-                    st.rerun()
+                    if verify_task_alive(r['id']): # 儲存時也再次確認防呆
+                        db_manager.update_reminder(r['id'], edit_content, new_time_str)
+                        st.session_state[f"edit_{r['id']}"] = False
+                        st.rerun()
             with scol2:
                 if st.button("❌ 取消", key=f"cancel_{r['id']}", use_container_width=True):
                     st.session_state[f"edit_{r['id']}"] = False
