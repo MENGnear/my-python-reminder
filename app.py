@@ -2,12 +2,11 @@
 # ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 # 專案名稱 : 提醒備忘系統 - 網頁主程式 (Telegram 深色戰情室 UI 版)
 # 檔案名稱 : app.py
-# 程式版本 : V2.2.7 (完美除錯與防呆版)
+# 程式版本 : V2.2.8 (UI 版面優化版)
 # 進版說明 : 
-#   1. 【修正】導入動態 Key 計數器 (input_counter)，解決強清表單造成的 StreamlitAPIException 崩潰。
-#   2. 【新增】實作 verify_task_alive() 雙重確認機制，解決點擊過期「幽靈小卡」沒有反應的錯覺。
-#   3. 【維持】保留 streamlit_autorefresh 每 5 分鐘防休眠心跳。
-#   4. 【維持】保留主畫面 5 欄配置與單筆測試按鈕。
+#   1. 【修正】調整 st.columns 比例為 [3.8, 3.2, 1.4, 1.4, 1.4]，確保按鈕等寬。
+#   2. 【修正】CSS 增加 white-space: nowrap，防止電腦版按鈕文字被擠壓斷行。
+#   3. 【維持】保留 V2.2.7 所有防休眠、動態 Key (防崩潰)、雙重確認 (防卡住) 邏輯。
 # ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 # ==========================================================
 
@@ -33,8 +32,19 @@ html, body, [data-testid="stAppViewContainer"] { font-family: 'Inter', sans-seri
 header[data-testid="stHeader"] { background-color: transparent !important; }
 .main .block-container { padding-top: 1.5rem !important; margin-top: -30px !important; }
 [data-testid="stVerticalBlockBorderWrapper"] { background-color: #1e293b !important; border: 1px solid #475569 !important; border-radius: 12px !important; padding: 15px !important; margin-bottom: 10px !important; }
-.stButton > button { background: linear-gradient(135deg, #3b82f6, #1d4ed8) !important; color: white !important; border: none !important; border-radius: 8px !important; font-weight: 600 !important; transition: all 0.2s ease !important; }
+
+/* 【V2.2.8 修正】：加入 white-space: nowrap !important; 防止按鈕文字斷行 */
+.stButton > button { 
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8) !important; 
+    color: white !important; 
+    border: none !important; 
+    border-radius: 8px !important; 
+    font-weight: 600 !important; 
+    transition: all 0.2s ease !important; 
+    white-space: nowrap !important; 
+}
 .stButton > button:hover { box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4) !important; transform: translateY(-1px) !important; }
+
 h1.main-title { color: #f8fafc; font-weight: 800; text-align: left; padding-bottom: 10px; border-bottom: 2px solid #1e293b; margin-bottom: 20px; font-size: 1.8rem; }
 .valign-text { margin-top: 6px; }
 div[data-testid="stSidebarUserContent"] .stRadio div[role="radiogroup"] { gap: 10px; }
@@ -44,7 +54,7 @@ div[data-testid="stSidebarUserContent"] .stRadio div[role="radiogroup"] { gap: 1
 # ==========================================================
 # 區塊 2：⚙️ 初始化、Session 狀態控制與 API
 # ==========================================================
-APP_VERSION = "V2.2.7"
+APP_VERSION = "V2.2.8"
 TW_TZ = datetime.timezone(datetime.timedelta(hours=8))
 now_in_tw = datetime.datetime.now(TW_TZ)
 
@@ -55,7 +65,7 @@ st_autorefresh(interval=5 * 60 * 1000, key="app_keepalive")
 if "init_date" not in st.session_state: st.session_state.init_date = now_in_tw.date()
 if "init_time" not in st.session_state: st.session_state.init_time = now_in_tw.time()
 
-# 【V2.2.7 核心修正】：動態 Key 計數器 (金蟬脫殼戰術)，取代直接清空字串
+# 動態 Key 計數器 (金蟬脫殼戰術)，取代直接清空字串避免崩潰
 if "input_counter" not in st.session_state: st.session_state.input_counter = 0
 
 def send_telegram_rmdr(message):
@@ -80,7 +90,7 @@ def init_scheduler():
 
 init_scheduler()
 
-# 【V2.2.7 核心新增】：幽靈小卡雙重確認機制 (Double-Check)
+# 幽靈小卡雙重確認機制 (Double-Check)
 def verify_task_alive(task_id):
     """確認該筆任務在資料庫中是否仍為 pending 狀態，防止對幽靈元件操作"""
     all_reminders = db_manager.get_all_reminders()
@@ -90,7 +100,6 @@ def verify_task_alive(task_id):
                 return True # 任務活著，允許操作
             else:
                 break # 找到了但狀態不是 pending
-    # 如果找不到或是非 pending，代表已被排程發送或作廢
     st.error("⚠️ 動作無效：此任務已在背景執行完畢或過期！畫面即將同步...")
     time.sleep(1.5)
     st.rerun()
@@ -105,7 +114,7 @@ with st.sidebar:
         
         task_type = st.radio("📌 任務類型", ["單次提醒", "週期提醒"], horizontal=True)
         
-        # 【V2.2.7 變更】：套用動態 Key (input_counter)
+        # 套用動態 Key (input_counter)
         dynamic_key = f"form_input_{st.session_state.input_counter}"
         content = st.text_input("備忘內容", key=dynamic_key, placeholder="例如：下午三點開會或每月繳費")
         
@@ -134,7 +143,7 @@ with st.sidebar:
             if content:
                 db_manager.add_reminder(content, remind_time_str, is_recurring, recurrence_type, recurrence_value)
                 st.toast("✅ 成功新增！", icon="✅")
-                # 【V2.2.7 變更】：不洗白字串，直接將計數器 +1 讓系統產生新輸入框 (金蟬脫殼)
+                # 不洗白字串，直接將計數器 +1 讓系統產生新輸入框 (金蟬脫殼)
                 st.session_state.input_counter += 1
                 st.rerun()
             else:
@@ -166,7 +175,8 @@ recurring_tasks = [r for r in reminders if r.get('is_recurring')]
 
 def render_task(r):
     with st.container(border=True):
-        col1, col2, col3, col4, col5 = st.columns([4, 3.5, 1.3, 1.2, 1.2])
+        # 【V2.2.8 修正】：重新分配欄位比例，讓三個按鈕的寬度權重保持一致 (1.4)，避免電腦版變形
+        col1, col2, col3, col4, col5 = st.columns([3.8, 3.2, 1.4, 1.4, 1.4])
         
         display_time = r['remind_time'][:16]
         icon = "🔄" if r.get('is_recurring') else "⏰"
@@ -180,7 +190,7 @@ def render_task(r):
             else:
                 st.markdown(f"<div class='valign-text'><span style='color:#38bdf8; font-size:1.0rem; font-weight:600;'>🕒 {display_time}</span></div>", unsafe_allow_html=True)
         
-        # 【V2.2.7 新增】：按鈕皆綁定 verify_task_alive 雙重確認機制
+        # 按鈕皆綁定 verify_task_alive 雙重確認機制，並使用 container_width 撐滿欄位
         with col3:
             if st.button("🗑️ 刪除", key=f"del_{r['id']}", use_container_width=True):
                 if verify_task_alive(r['id']):
