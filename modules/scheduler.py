@@ -2,10 +2,10 @@
 # ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 # 專案名稱 : 提醒備忘系統 - 背景排程器模組
 # 檔案名稱 : scheduler.py
-# 程式版本 : V2.2.6 (雲端特化版 - 過期防護)
+# 程式版本 : V2.2.7 (完美除錯與防呆版)
 # 進版說明 :
-#   1. 新增 15 分鐘「過期防護機制」，避免 SCC 休眠喚醒時瘋狂補發舊訊息。
-#   2. 保留完整的自動推播格式與圖示空格優化。
+#   1. 【維持】保留 15 分鐘「過期防護機制」，防休眠喚醒洗版。
+#   2. 【維持】保留 processing 鎖定機制，從物理上阻絕同一秒雙重發送的可能。
 # ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 # ==========================================================
 
@@ -18,7 +18,6 @@ from modules import db_manager
 _scheduler_started = False
 _scheduler_lock = threading.Lock()
 
-# 呼叫 app.py 的發送函式
 def send_telegram(msg):
     from app import send_telegram_rmdr
     return send_telegram_rmdr(msg)
@@ -56,39 +55,32 @@ def calculate_next_run(remind_time_str, recur_type, recur_val):
 # 區塊 2：核心排程掃描與過期防護邏輯
 # ==========================================================
 def check_and_send_reminders():
-    """檢查資料庫並發送提醒 (內建過期防護)"""
+    """檢查資料庫並發送提醒 (內建過期防護與處理鎖定)"""
     now = datetime.datetime.now(TW_TZ)
     reminders = db_manager.get_all_reminders()
     
     for r in reminders:
         if r['status'] == 'pending':
-            # 將資料庫的字串時間轉為 datetime 物件，用於計算時間差
             remind_dt = datetime.datetime.strptime(r['remind_time'], "%Y-%m-%d %H:%M:%S").replace(tzinfo=TW_TZ)
-            
-            # 計算時間差 (分鐘)
             diff_minutes = (now - remind_dt).total_seconds() / 60.0
             
-            # 【V2.2.6 核心防護】：過期超過 15 分鐘的任務直接作廢，不補發
+            # 【核心防護 1】：過期超過 15 分鐘的任務直接作廢，不補發
             if diff_minutes > 15:
                 print(f"[{now.strftime('%H:%M:%S')}] 🛡️ 攔截過期任務，避免洗版: {r['content']}")
                 db_manager.update_status(r['id'], 'expired')
                 continue
             
-            # 時間到了，且在 15 分鐘有效期限內 -> 進行正常發送
+            # 時間到了，且在 15 分鐘有效期限內
             elif diff_minutes >= 0:
-                # 先鎖定狀態為 processing，避免其他執行緒重複抓取
+                # 【核心防護 2】：先鎖定狀態為 processing，避免其他執行緒或介面重複抓取
                 db_manager.update_status(r['id'], 'processing')
                 
-                # 切片去掉秒數 (取前16碼: 2026-07-05 20:30)
                 display_time = r['remind_time'][:16]
-                
-                # 套用格式與圖示
                 if r.get('is_recurring'):
                     msg = f"🔄 {display_time}\n📝 {r['content']}"
                 else:
                     msg = f"⏰ {display_time}\n📝 {r['content']}"
                 
-                # 觸發發送
                 success, _ = send_telegram(msg)
                 
                 if success:
